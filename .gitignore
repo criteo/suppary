@@ -1,0 +1,8 @@
+.env
+# python
+.venv
+.ruff_cache
+__pycache__
+
+# IDEs
+.idea
