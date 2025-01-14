@@ -18,7 +18,10 @@ from .slack.services import organize_messages_by_thread
 @click.option(
     "--duration", type=int, default=7, help="Number of days to look back from end date"
 )
-def summarize(channels: list[str], end_date: datetime, duration: int):
+@click.option(
+    "--verbose", is_flag=True, default=False, help="Print threads' information"
+)
+def summarize(channels: list[str], end_date: datetime, duration: int, verbose: bool):
     """Fetch Slack threads from specified channels."""
 
     # Get environment variables
@@ -48,6 +51,9 @@ def summarize(channels: list[str], end_date: datetime, duration: int):
                 click.echo(f"Error processing #{channel}: {str(e)}", err=True)
 
     asyncio.run(fetch_messages())
+
+    if not verbose:
+        return
 
     # Organize messages by thread
     for processed_channel, processed_messages in all_messages.items():
