@@ -46,7 +46,9 @@ def summarize(channels: list[str], end_date: datetime, duration: int, verbose: b
             try:
                 messages = await task
                 all_messages[channel] = messages
-                click.echo(f"Retrieved {len(messages)} messages (including those in threads) from #{channel}")
+                click.echo(
+                    f"Retrieved {len(messages)} messages (including those in threads) from #{channel}"
+                )
             except Exception as e:
                 click.echo(f"Error processing #{channel}: {str(e)}", err=True)
 
@@ -69,7 +71,9 @@ def summarize(channels: list[str], end_date: datetime, duration: int, verbose: b
                 "%Y-%m-%d %H:%M:%S"
             )
             first_message = thread[0].get("text", "No message content")
-            click.echo(f"\nThread from {thread_date}: {len(thread)} messages - First message: {first_message}")
+            click.echo(
+                f"\nThread from {thread_date}: {len(thread)} messages - First message: {first_message}"
+            )
 
 
 if __name__ == "__main__":

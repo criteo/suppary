@@ -26,51 +26,22 @@ class SlackClient:
             start_date = end_date - timedelta(days=duration)
             messages = []
 
-            async def fetch_history(cursor: str | None = None) -> dict:
-                return await self.client.conversations_history(
-                    channel=channel,
-                    oldest=start_date.timestamp(),
-                    latest=end_date.timestamp(),
-                    cursor=cursor,
-                )
-
-            async def fetch_thread_replies(thread_ts: str) -> List[dict]:
-                try:
-                    result = await self.client.conversations_replies(
-                        channel=channel,
-                        ts=thread_ts,
-                    )
-                    if result["ok"]:
-                        return result["messages"]
-                    else:
-                        click.echo(
-                            f"Error fetching thread replies in {channel_name}: {result.get('error', 'Unknown error')}",
-                            err=True,
-                        )
-                        return []
-                except SlackApiError as e:
-                    click.echo(
-                        f"Error fetching thread replies in {channel_name}: {str(e)}",
-                        err=True,
-                    )
-                    return []
-
             # Get channel history
-            result = await fetch_history()
+            result = await self._fetch_history(channel, start_date, end_date)
 
             if result["ok"]:
                 messages.extend(result["messages"])
 
                 # Handle pagination
                 while result.get("has_more", False):
-                    result = await fetch_history(
-                        result["response_metadata"]["next_cursor"]
+                    result = await self._fetch_history(
+                        channel,
+                        start_date,
+                        end_date,
+                        result["response_metadata"]["next_cursor"],
                     )
                     if result["ok"]:
                         messages.extend(result["messages"])
-                        click.echo(
-                            f"Fetched {len(messages)} messages from channel {channel_name}"
-                        )
                     else:
                         click.echo(
                             f"Error in pagination for channel {channel_name}: {result.get('error', 'Unknown error')}",
@@ -82,7 +53,9 @@ class SlackClient:
                 for message in messages:
                     if message.get("thread_ts") and message.get("reply_count", 0) > 0:
                         task = asyncio.create_task(
-                            fetch_thread_replies(message["thread_ts"])
+                            self._fetch_thread_replies(
+                                channel, channel_name, message["thread_ts"]
+                            )
                         )
                         thread_tasks.append(task)
 
@@ -116,26 +89,25 @@ class SlackClient:
             Channel ID if found, None otherwise
         """
 
-        async def fetch_conversations(conv_type: str, cursor: str | None = None) -> dict:
-            return await self.client.conversations_list(
-                types=conv_type,
-                cursor=cursor,
-                limit=1000  # Maximum allowed by Slack API
-            )
-
         # Try to find channel in different conversation types
         for conv_type in ["public_channel", "private_channel", "mpim,im"]:
             try:
-                result = await fetch_conversations(conv_type)
+                result = await self._fetch_conversations(conv_type)
 
                 while True:
                     if not result["ok"]:
-                        click.echo(f"Error fetching {conv_type} list: {result.get('error', 'Unknown error')}", err=True)
+                        click.echo(
+                            f"Error fetching {conv_type} list: {result.get('error', 'Unknown error')}",
+                            err=True,
+                        )
                         break
 
                     # Check channels in current page
                     for ch in result["channels"]:
-                        if ch.get("name") == channel_name or ch.get("user") == channel_name:
+                        if (
+                            ch.get("name") == channel_name
+                            or ch.get("user") == channel_name
+                        ):
                             return ch["id"]
 
                     # Check if there are more pages
@@ -143,9 +115,8 @@ class SlackClient:
                         break
 
                     # Fetch next page
-                    result = await fetch_conversations(
-                        conv_type,
-                        result["response_metadata"]["next_cursor"]
+                    result = await self._fetch_conversations(
+                        conv_type, result["response_metadata"]["next_cursor"]
                     )
 
             except SlackApiError as e:
@@ -153,3 +124,49 @@ class SlackClient:
 
         click.echo(f"Channel not found: {channel_name}", err=True)
         return None
+
+    async def _fetch_thread_replies(
+        self, channel: str, channel_name: str, thread_ts: str
+    ) -> List[dict]:
+        try:
+            result = await self.client.conversations_replies(
+                channel=channel,
+                ts=thread_ts,
+            )
+            if result["ok"]:
+                return result["messages"]
+            else:
+                click.echo(
+                    f"Error fetching thread replies in {channel_name}: {result.get('error', 'Unknown error')}",
+                    err=True,
+                )
+                return []
+        except SlackApiError as e:
+            click.echo(
+                f"Error fetching thread replies in {channel_name}: {str(e)}",
+                err=True,
+            )
+            return []
+
+    async def _fetch_history(
+        self,
+        channel: str,
+        start_date: datetime,
+        end_date: datetime,
+        cursor: str | None = None,
+    ) -> dict:
+        return await self.client.conversations_history(
+            channel=channel,
+            oldest=start_date.timestamp(),
+            latest=end_date.timestamp(),
+            cursor=cursor,
+        )
+
+    async def _fetch_conversations(
+        self, conv_type: str, cursor: str | None = None
+    ) -> dict:
+        return await self.client.conversations_list(
+            types=conv_type,
+            cursor=cursor,
+            limit=1000,  # Maximum allowed by Slack API
+        )
