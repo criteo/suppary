@@ -18,23 +18,8 @@ class SlackClient:
         end_date = end_date.replace(hour=23, minute=59, second=59, microsecond=999999)
         try:
             # Get channel ID from name
-            result = await self.client.conversations_list()
-            channel = None
-
-            if result["ok"]:
-                for ch in result["channels"]:
-                    if ch["name"] == channel_name:
-                        channel = ch["id"]
-                        break
-
-                if not channel:
-                    click.echo(f"Channel not found: {channel_name}", err=True)
-                    return []
-            else:
-                click.echo(
-                    f"Error fetching channel list: {result.get('error', 'Unknown error')}",
-                    err=True,
-                )
+            channel = await self._get_channel_id(channel_name)
+            if not channel:
                 return []
 
             # Proceed with message fetching using channel ID
@@ -120,3 +105,51 @@ class SlackClient:
             return []
 
         return messages
+
+    async def _get_channel_id(self, channel_name: str) -> str | None:
+        """Get channel ID from channel name.
+
+        Args:
+            channel_name: Name of the channel to look up
+
+        Returns:
+            Channel ID if found, None otherwise
+        """
+
+        async def fetch_conversations(conv_type: str, cursor: str | None = None) -> dict:
+            return await self.client.conversations_list(
+                types=conv_type,
+                cursor=cursor,
+                limit=1000  # Maximum allowed by Slack API
+            )
+
+        # Try to find channel in different conversation types
+        for conv_type in ["public_channel", "private_channel", "mpim,im"]:
+            try:
+                result = await fetch_conversations(conv_type)
+
+                while True:
+                    if not result["ok"]:
+                        click.echo(f"Error fetching {conv_type} list: {result.get('error', 'Unknown error')}", err=True)
+                        break
+
+                    # Check channels in current page
+                    for ch in result["channels"]:
+                        if ch.get("name") == channel_name or ch.get("user") == channel_name:
+                            return ch["id"]
+
+                    # Check if there are more pages
+                    if not result.get("response_metadata", {}).get("next_cursor"):
+                        break
+
+                    # Fetch next page
+                    result = await fetch_conversations(
+                        conv_type,
+                        result["response_metadata"]["next_cursor"]
+                    )
+
+            except SlackApiError as e:
+                click.echo(f"Error fetching {conv_type} list: {str(e)}", err=True)
+
+        click.echo(f"Channel not found: {channel_name}", err=True)
+        return None

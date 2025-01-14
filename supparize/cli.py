@@ -1,7 +1,6 @@
 import os
 import click
 from datetime import datetime
-from slack_sdk.web.async_client import AsyncWebClient
 import asyncio
 
 from .slack.clients import SlackClient
@@ -30,7 +29,7 @@ def summarize(channels: list[str], end_date: datetime, duration: int):
     client = SlackClient(token=slack_token)
 
     # Fetch messages from all channels asynchronously
-    all_messages = []
+    all_messages = {}
 
     async def fetch_messages():
         tasks = []
@@ -43,31 +42,28 @@ def summarize(channels: list[str], end_date: datetime, duration: int):
         for task, channel in tasks:
             try:
                 messages = await task
-                all_messages.extend(messages)
-                click.echo(f"Retrieved {len(messages)} messages from channel {channel}")
+                all_messages[channel] = messages
+                click.echo(f"Retrieved {len(messages)} messages (including those in threads) from #{channel}")
             except Exception as e:
-                click.echo(f"Error processing channel {channel}: {str(e)}", err=True)
+                click.echo(f"Error processing #{channel}: {str(e)}", err=True)
 
     asyncio.run(fetch_messages())
 
     # Organize messages by thread
-    organized_messages = organize_messages_by_thread(all_messages)
+    for processed_channel, processed_messages in all_messages.items():
+        organized_messages = organize_messages_by_thread(processed_messages)
 
-    # Output results
-    total_messages = len(all_messages)
-    total_channels = len(channels)
-    click.echo(f"\nFound {total_messages} messages across {total_channels} channels")
-    click.echo("\nMessages organized by thread:")
-    for thread_ts in sorted(organized_messages.keys(), key=float):
-        thread = organized_messages[thread_ts]
-        thread_date = datetime.fromtimestamp(float(thread_ts)).strftime(
-            "%Y-%m-%d %H:%M:%S"
-        )
-        first_message = thread[0].get("text", "No message content")
-        click.echo(f"\nThread from {thread_date}: {len(thread)} messages")
-        click.echo(f"\nFirst message: {first_message}")
-
-    return organized_messages
+        # Output results
+        total_messages = len(processed_messages)
+        click.echo(f"\nFound {total_messages} messages for #{processed_channel}")
+        click.echo("\nMessages organized by thread:")
+        for thread_ts in sorted(organized_messages.keys(), key=float):
+            thread = organized_messages[thread_ts]
+            thread_date = datetime.fromtimestamp(float(thread_ts)).strftime(
+                "%Y-%m-%d %H:%M:%S"
+            )
+            first_message = thread[0].get("text", "No message content")
+            click.echo(f"\nThread from {thread_date}: {len(thread)} messages - First message: {first_message}")
 
 
 if __name__ == "__main__":
