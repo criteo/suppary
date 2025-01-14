@@ -54,13 +54,18 @@ def summarize(channels: list[str], end_date: datetime, duration: int):
     organized_messages = organize_messages_by_thread(all_messages)
 
     # Output results
+    total_messages = len(all_messages)
+    total_channels = len(channels)
+    click.echo(f"\nFound {total_messages} messages across {total_channels} channels")
     click.echo("\nMessages organized by thread:")
     for thread_ts in sorted(organized_messages.keys(), key=float):
         thread = organized_messages[thread_ts]
         thread_date = datetime.fromtimestamp(float(thread_ts)).strftime(
             "%Y-%m-%d %H:%M:%S"
         )
-        click.echo(f"Thread from {thread_date}: {len(thread)} messages")
+        first_message = thread[0].get("text", "No message content")
+        click.echo(f"\nThread from {thread_date}: {len(thread)} messages")
+        click.echo(f"\nFirst message: {first_message}")
 
     return organized_messages
 

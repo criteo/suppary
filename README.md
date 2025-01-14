@@ -33,23 +33,23 @@ export SLACK_TOKEN="xoxb-your-token"
 ## Basic usage - fetch threads from multiple channels
 
 ```bash
-supparize general announcements
+uv run supparize general announcements
 ```
 
 ## Specify end date
 
 ```bash
-supparize general --end-date 2024-03-20
+uv run supparize general --end-date 2024-03-20
 ```
 
 ## Customize lookup duration
 
 ```bash
-supparize general --duration 14
+uv run supparize general --duration 14
 ```
 
 ## Combine options
 
 ```bash
-supparize general announcements --end-date 2024-03-20 --duration 14
+uv run supparize general announcements --end-date 2024-03-20 --duration 14
 ```
